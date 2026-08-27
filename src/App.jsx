@@ -107,10 +107,68 @@ function calcularRangoPeriodo(periodo) {
   return { inicio, fin, inicioAnt, finAnt, dias, label };
 }
 
+// ─── Exportar Excel (CSV) ─────────────────────────────────────────────────────
+function csvEscape(valor) {
+  const s = String(valor ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportarExcel(regs, materiales, gestores, nombreArchivo) {
+  const matsActivos = materiales.filter(m => m.activo);
+  const headers = [
+    "Fecha", "Usuario", "Material", "Nivel", "Nivel texto",
+    "Rechazado", "Tipo rechazado", "Retiro", "Material retirado", "Gestor", "Observaciones",
+  ];
+  const filas = [];
+  regs.forEach(r => {
+    const materialRetiradoLabel = materiales.find(m => m.id === r.materialRetirado)?.label || "";
+    const gestorNombre = gestores.find(g => g.id === r.gestor)?.nombre || "";
+    matsActivos.forEach(m => {
+      const nivel = r.ocupacion?.[m.id];
+      if (nivel == null) return;
+      filas.push([
+        r.fecha,
+        r.usuario,
+        m.label,
+        nivel,
+        nivelInfo(nivel).label,
+        r.rechazado ? "Sí" : "No",
+        r.tipoRechazado || "",
+        r.retiro ? "Sí" : "No",
+        materialRetiradoLabel,
+        gestorNombre,
+        r.observaciones || "",
+      ]);
+    });
+  });
+  const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── Exportar reporte PDF ─────────────────────────────────────────────────────
 function hexToRgb(hex) {
   const n = parseInt(hex.replace("#", ""), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+async function cargarImagenComoDataURL(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`No se pudo cargar ${url}`);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 async function exportarPDF({ rango, statsFiltrados, alertas, retiros, retirosPorGestor, rechazados, diasRegistrados, cumplimiento }) {
@@ -144,12 +202,17 @@ async function exportarPDF({ rango, statsFiltrados, alertas, retiros, retirosPor
   doc.setFillColor(...teal);
   doc.rect(0, 0, pageW, 36, "F");
 
-  doc.setFillColor(...white);
-  doc.circle(24, 18, 9, "F");
-  doc.setTextColor(...teal);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("♻", 24, 21.5, { align: "center" });
+  const logoSize = 20;
+  const logoX = marginX;
+  const logoY = (36 - logoSize) / 2;
+  try {
+    const logoDataUrl = await cargarImagenComoDataURL("/icons/icon-192.png");
+    doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoSize, logoSize);
+  } catch {
+    // Sin conexión al ícono: se deja un badge circular como respaldo.
+    doc.setFillColor(...white);
+    doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2, "F");
+  }
 
   doc.setTextColor(...white);
   doc.setFont("helvetica", "bold");
@@ -664,6 +727,9 @@ function ViewDashboard({ registros, materiales, gestores }) {
             <option value="todos">Todos los materiales</option>
             {mats.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
+          <Btn variant="secondary" size="sm" onClick={() => exportarExcel(registrosPeriodo, materiales, gestores, `punto-limpio_${filtroPeriodo}_${fechaHoy()}.csv`)}>
+            📥 Exportar Excel
+          </Btn>
           <Btn variant="secondary" size="sm" onClick={() => exportarPDF({ rango, statsFiltrados, alertas, retiros, retirosPorGestor, rechazados, diasRegistrados, cumplimiento })}>
             📄 Exportar reporte PDF
           </Btn>
