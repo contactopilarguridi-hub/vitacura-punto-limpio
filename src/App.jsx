@@ -604,6 +604,77 @@ function SectionTitle({ children, color = C.teal }) {
   return <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>{children}</div>;
 }
 
+// Ilustración del encabezado del dashboard: vista aérea de un barrio reciclando
+// (flat design, sin sombras, sin personas).
+const EDIFICIOS_ILUSTRACION = [
+  { x: 48, y: 70, w: 40, h: 36, color: "#C6217A" },
+  { x: 100, y: 54, w: 34, h: 30, color: "#00A99D" },
+  { x: 230, y: 44, w: 38, h: 34, color: "#00A99D" },
+  { x: 270, y: 78, w: 32, h: 30, color: "#C6217A" },
+  { x: 430, y: 42, w: 36, h: 32, color: "#C6217A" },
+  { x: 468, y: 76, w: 34, h: 30, color: "#00A99D" },
+  { x: 610, y: 56, w: 38, h: 34, color: "#00A99D" },
+  { x: 655, y: 90, w: 32, h: 28, color: "#C6217A" },
+];
+const ARBOLES_ILUSTRACION = [
+  { cx: 20, cy: 45, r: 7 },
+  { cx: 150, cy: 100, r: 10 },
+  { cx: 200, cy: 122, r: 8 },
+  { cx: 330, cy: 112, r: 9 },
+  { cx: 380, cy: 50, r: 7 },
+  { cx: 520, cy: 112, r: 10 },
+  { cx: 570, cy: 44, r: 8 },
+  { cx: 715, cy: 70, r: 9 },
+];
+const TACHOS_ILUSTRACION = [
+  { x: 14, y: 118, color: "#00A99D" },
+  { x: 178, y: 58, color: "#C6217A" },
+  { x: 398, y: 96, color: "#8DC63F" },
+  { x: 600, y: 112, color: "#00A99D" },
+  { x: 744, y: 48, color: "#C6217A" },
+];
+
+function IlustracionCiudad() {
+  return (
+    <svg width="100%" height="160" viewBox="0 0 800 160" role="img" aria-label="Ilustración de un barrio reciclando" style={{ display: "block" }}>
+      <rect x="0" y="0" width="800" height="160" rx="16" fill="#F3F4F6" />
+
+      {/* Calle */}
+      <path d="M10,95 Q200,82 400,95 T790,90" stroke="#ffffff" strokeWidth="7" strokeLinecap="round" fill="none" opacity="0.9" />
+
+      {/* Edificios con tejado verde */}
+      {EDIFICIOS_ILUSTRACION.map((e, i) => (
+        <g key={i}>
+          <rect x={e.x} y={e.y} width={e.w} height={e.h} rx="6" fill={e.color} />
+          <rect x={e.x + 3} y={e.y} width={e.w - 6} height={e.h * 0.45} rx="4" fill="#8DC63F" />
+        </g>
+      ))}
+
+      {/* Árboles redondeados */}
+      {ARBOLES_ILUSTRACION.map((t, i) => (
+        <circle key={i} cx={t.cx} cy={t.cy} r={t.r} fill="#8DC63F" />
+      ))}
+
+      {/* Contenedores de colores en las calles */}
+      {TACHOS_ILUSTRACION.map((b, i) => (
+        <g key={i}>
+          <rect x={b.x} y={b.y + 3} width="10" height="10" rx="2" fill={b.color} />
+          <rect x={b.x - 1} y={b.y} width="12" height="3.5" rx="1.5" fill={b.color} />
+        </g>
+      ))}
+
+      {/* Flechas curvas de reciclaje conectando los barrios */}
+      <path d="M40,62 C150,14 250,14 340,32 C430,50 530,50 620,22 C665,9 715,12 752,32"
+        stroke="#00A99D" strokeWidth="4" strokeLinecap="round" fill="none" />
+      <polygon points="746,22 764,33 747,46" fill="#00A99D" />
+
+      <path d="M760,100 C650,150 550,150 460,130 C370,110 270,110 180,128 C130,138 92,133 58,113"
+        stroke="#C6217A" strokeWidth="4" strokeLinecap="round" fill="none" />
+      <polygon points="65,103 47,113 66,126" fill="#C6217A" />
+    </svg>
+  );
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -833,6 +904,8 @@ function ViewDashboard({ registros, materiales, gestores }) {
           </Btn>
         </div>
       </div>
+
+      <IlustracionCiudad />
 
       {/* Métricas */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
