@@ -25,6 +25,7 @@ const MATERIALES_INIT = [
   { id: "pilas", label: "Pilas y baterías", emoji: "🔋", activo: true },
   { id: "medicamentos", label: "Medicamentos vencidos", emoji: "💊", activo: true },
   { id: "cartridge", label: "Cartridge y tóner", emoji: "🖨️", activo: true },
+  { id: "residuos_organicos", label: "Residuos orgánicos", emoji: "🌱", activo: true },
 ];
 
 const GESTORES_INIT = [
