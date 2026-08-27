@@ -13,20 +13,39 @@ const C = {
 
 // ─── Datos iniciales ──────────────────────────────────────────────────────────
 const MATERIALES_INIT = [
-  { id: "papel_carton", label: "Papel y cartón", emoji: "📦", activo: true },
-  { id: "vidrio", label: "Vidrio", emoji: "🍾", activo: true },
-  { id: "latas", label: "Latas de aluminio", emoji: "🥫", activo: true },
-  { id: "plastico_envases", label: "Envases plásticos", emoji: "🧴", activo: true },
-  { id: "plastico_botellas", label: "Botellas plásticas", emoji: "🧃", activo: true },
-  { id: "tetrapak", label: "Tetra pak", emoji: "🥛", activo: true },
-  { id: "metal", label: "Metal y chatarra", emoji: "⚙️", activo: true },
-  { id: "ropa", label: "Ropa", emoji: "👕", activo: true },
-  { id: "electrodomesticos", label: "Electrónicos", emoji: "💻", activo: true },
-  { id: "pilas", label: "Pilas y baterías", emoji: "🔋", activo: true },
-  { id: "medicamentos", label: "Medicamentos vencidos", emoji: "💊", activo: true },
-  { id: "cartridge", label: "Cartridge y tóner", emoji: "🖨️", activo: true },
-  { id: "residuos_organicos", label: "Residuos orgánicos", emoji: "🌱", activo: true },
+  { id: "papel_carton", label: "Papel y cartón", activo: true },
+  { id: "vidrio", label: "Vidrio", activo: true },
+  { id: "latas", label: "Latas de aluminio", activo: true },
+  { id: "plastico_envases", label: "Envases plásticos", activo: true },
+  { id: "plastico_botellas", label: "Botellas plásticas", activo: true },
+  { id: "tetrapak", label: "Tetra pak", activo: true },
+  { id: "metal", label: "Metal y chatarra", activo: true },
+  { id: "ropa", label: "Ropa", activo: true },
+  { id: "electrodomesticos", label: "Electrónicos", activo: true },
+  { id: "pilas", label: "Pilas y baterías", activo: true },
+  { id: "medicamentos", label: "Medicamentos vencidos", activo: true },
+  { id: "cartridge", label: "Cartridge y tóner", activo: true },
+  { id: "residuos_organicos", label: "Residuos orgánicos", activo: true },
 ];
+
+// Color institucional por tipo de material (ícono del contenedor).
+const MATERIAL_COLORS = {
+  papel_carton: "#3B82F6",
+  vidrio: "#22C55E",
+  latas: "#9CA3AF",
+  plastico_envases: "#F59E0B",
+  plastico_botellas: "#F59E0B",
+  tetrapak: "#F59E0B",
+  metal: "#6B7280",
+  ropa: "#A855F7",
+  electrodomesticos: "#00A99D",
+  pilas: "#EF4444",
+  medicamentos: "#EC4899",
+  cartridge: "#F97316",
+  residuos_organicos: "#8DC63F",
+};
+const MATERIAL_COLOR_DEFAULT = "#6B7280";
+function colorMaterial(id) { return MATERIAL_COLORS[id] || MATERIAL_COLOR_DEFAULT; }
 
 const GESTORES_INIT = [
   { id: "coaniquem", nombre: "Coaniquem", activo: true },
@@ -127,6 +146,14 @@ function calcularRangoPeriodo(periodo) {
   return { inicio, fin, inicioAnt, finAnt, dias, label };
 }
 
+function diasDelPeriodo(inicio, fin) {
+  const dias = [];
+  for (let d = new Date(inicio); d <= fin; d = addDias(d, 1)) {
+    dias.push(toISO(d));
+  }
+  return dias;
+}
+
 // ─── Exportar Excel (CSV) ─────────────────────────────────────────────────────
 function csvEscape(valor) {
   const s = String(valor ?? "");
@@ -177,6 +204,17 @@ function exportarExcel(regs, materiales, gestores, nombreArchivo) {
 function hexToRgb(hex) {
   const n = parseInt(hex.replace("#", ""), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Dibuja el mismo ícono de contenedor/tacho de la UI (tapa + cuerpo redondeado),
+// en miniatura, dentro de una tabla del PDF.
+function dibujarIconoContenedorPDF(doc, x, y, size, colorRgb) {
+  const bodyH = size * 0.7;
+  const lidH = size * 0.22;
+  const bodyY = y + size - bodyH;
+  doc.setFillColor(...colorRgb);
+  doc.roundedRect(x, bodyY, size, bodyH, 0.5, 0.5, "F");
+  doc.roundedRect(x - 0.4, bodyY - lidH, size + 0.8, lidH, 0.4, 0.4, "F");
 }
 
 async function cargarImagenComoDataURL(url) {
@@ -289,15 +327,25 @@ async function exportarPDF({ rango, statsFiltrados, alertas, retiros, retirosPor
     startY: y,
     margin: { left: marginX, right: marginX },
     head: [["Material", "Promedio", "Nivel"]],
-    body: statsFiltrados.map(m => [`${m.emoji} ${m.label}`, `${m.promActual}/5`, nivelInfo(Math.round(m.promActual) || 1).label]),
+    body: statsFiltrados.map(m => [m.label, `${m.promActual}/5`, nivelInfo(Math.round(m.promActual) || 1).label]),
     styles: { fontSize: 9, cellPadding: 3 },
     headStyles: { fillColor: teal, textColor: white, fontStyle: "bold" },
+    columnStyles: { 0: { cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 9 } } },
     didParseCell: (data) => {
       if (data.section === "body" && data.column.index === 2) {
         const m = statsFiltrados[data.row.index];
         const nivel = nivelInfo(Math.round(m.promActual) || 1);
         data.cell.styles.textColor = hexToRgb(nivel.color);
         data.cell.styles.fontStyle = "bold";
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section === "body" && data.column.index === 0) {
+        const m = statsFiltrados[data.row.index];
+        const iconSize = 4;
+        const iconX = data.cell.x + 1.8;
+        const iconY = data.cell.y + (data.cell.height - iconSize) / 2;
+        dibujarIconoContenedorPDF(doc, iconX, iconY, iconSize, hexToRgb(colorMaterial(m.id)));
       }
     },
   });
@@ -479,19 +527,46 @@ function BarraH({ valor }) {
   );
 }
 
-function Sparkline({ valores, color }) {
-  const w = 220, h = 36, pad = 3;
-  if (valores.length < 2) {
-    return <div style={{ fontSize: 11, color: C.gray400, height: h, display: "flex", alignItems: "center" }}>Datos insuficientes para graficar tendencia.</div>;
-  }
-  const stepX = (w - pad * 2) / (valores.length - 1);
-  const y = v => h - pad - ((v - 1) / 4) * (h - pad * 2);
-  const puntos = valores.map((v, i) => `${pad + i * stepX},${y(v)}`).join(" ");
+// Ícono de contenedor/tacho — reemplaza el emoji de cada material.
+function IconoContenedor({ color = MATERIAL_COLOR_DEFAULT, size = 20 }) {
   return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
-      <polyline points={puntos} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      {valores.map((v, i) => <circle key={i} cx={pad + i * stepX} cy={y(v)} r="2" fill={color} />)}
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0, display: "block" }}>
+      <rect x="9" y="2.5" width="6" height="2.5" rx="1.25" fill={color} />
+      <rect x="4" y="6" width="16" height="3" rx="1.5" fill={color} />
+      <rect x="5.5" y="10" width="13" height="12" rx="2.5" fill={color} />
+      <rect x="9" y="13" width="1.6" height="6" rx="0.8" fill="#fff" opacity="0.55" />
+      <rect x="13.4" y="13" width="1.6" height="6" rx="0.8" fill="#fff" opacity="0.55" />
     </svg>
+  );
+}
+
+// Etiqueta de material: ícono de contenedor + nombre.
+function MaterialLabel({ material, style = {} }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, ...style }}>
+      <IconoContenedor color={colorMaterial(material.id)} size={16} />
+      {material.label}
+    </span>
+  );
+}
+
+// Barras diarias: una barra por día del período, coloreada según nivel de ocupación.
+function BarrasDiarias({ dias, registrosPorFecha, materialId }) {
+  const h = 40;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: h }}>
+      {dias.map(fecha => {
+        const nivel = registrosPorFecha[fecha]?.ocupacion?.[materialId];
+        if (nivel == null) {
+          return <div key={fecha} title={`${fecha}: sin registro`} style={{ flex: 1, minWidth: 2, height: 4, background: C.gray200, borderRadius: 2 }} />;
+        }
+        const info = nivelInfo(nivel);
+        return (
+          <div key={fecha} title={`${fecha} — ${info.label} (${nivel}/5)`}
+            style={{ flex: 1, minWidth: 2, height: `${nivel * 20}%`, background: info.color, borderRadius: 2 }} />
+        );
+      })}
+    </div>
   );
 }
 
@@ -619,7 +694,7 @@ function ViewFormulario({ registros, materiales, gestores, usuario, onGuardar })
             return (
               <div key={m.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: C.gray900 }}>{m.emoji} {m.label}</span>
+                  <MaterialLabel material={m} style={{ fontSize: 13, fontWeight: 600, color: C.gray900 }} />
                   <Tag label={info.label} color={info.color} bg={info.bg} />
                 </div>
                 <div style={{ display: "flex", gap: 5 }}>
@@ -690,6 +765,9 @@ function ViewDashboard({ registros, materiales, gestores }) {
 
   const registrosPeriodo = registros.filter(r => r.fecha >= inicioISO && r.fecha <= finISO);
   const registrosPeriodoAnterior = registros.filter(r => r.fecha >= inicioAntISO && r.fecha <= finAntISO);
+
+  const diasPeriodo = diasDelPeriodo(rango.inicio, rango.fin);
+  const registrosPorFecha = Object.fromEntries(registrosPeriodo.map(r => [r.fecha, r]));
 
   function prom(regs, id) {
     if (!regs.length) return 0;
@@ -792,7 +870,7 @@ function ViewDashboard({ registros, materiales, gestores }) {
           {statsFiltrados.map(m => (
             <div key={m.id}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 13, color: C.gray900 }}>{m.emoji} {m.label}</span>
+                <MaterialLabel material={m} style={{ fontSize: 13, color: C.gray900 }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: m.variacion > 0.5 ? C.orange : m.variacion < -0.5 ? C.fucsia : C.gray400 }}>
                   {m.variacion > 0 ? "↑" : m.variacion < 0 ? "↓" : "="} {Math.abs(m.variacion)} vs período anterior
                 </span>
@@ -806,20 +884,16 @@ function ViewDashboard({ registros, materiales, gestores }) {
       {/* Tendencia */}
       <Card style={{ padding: 20 }}>
         <SectionTitle>Tendencia por material — {rango.label}</SectionTitle>
-        {registrosPeriodo.length < 2 ? (
-          <div style={{ fontSize: 12, color: C.gray400 }}>No hay suficientes registros en el período para graficar la tendencia.</div>
+        {registrosPeriodo.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.gray400 }}>No hay registros en el período para graficar la tendencia.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {statsFiltrados.map(m => {
-              const valores = registrosPeriodo.map(r => r.ocupacion?.[m.id]).filter(v => v != null);
-              const color = nivelInfo(Math.round(m.promActual) || 1).color;
-              return (
-                <div key={m.id}>
-                  <div style={{ fontSize: 13, color: C.gray900, marginBottom: 4 }}>{m.emoji} {m.label}</div>
-                  <Sparkline valores={valores} color={color} />
-                </div>
-              );
-            })}
+            {statsFiltrados.map(m => (
+              <div key={m.id}>
+                <MaterialLabel material={m} style={{ fontSize: 13, color: C.gray900, marginBottom: 4 }} />
+                <BarrasDiarias dias={diasPeriodo} registrosPorFecha={registrosPorFecha} materialId={m.id} />
+              </div>
+            ))}
           </div>
         )}
       </Card>
@@ -838,7 +912,7 @@ function ViewDashboard({ registros, materiales, gestores }) {
                 const gest = gestores.find(g => g.id === r.gestor);
                 return (
                   <div key={i} style={{ fontSize: 12, color: C.gray900, marginBottom: 6, padding: "6px 8px", background: C.gray100, borderRadius: 6 }}>
-                    <div style={{ fontWeight: 600 }}>{mat?.emoji} {mat?.label}</div>
+                    <div style={{ fontWeight: 600 }}>{mat && <MaterialLabel material={mat} />}</div>
                     <div style={{ color: C.gray600 }}>{gest?.nombre} · {r.fecha}</div>
                   </div>
                 );
@@ -887,7 +961,7 @@ function ViewDashboard({ registros, materiales, gestores }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
               {mats.map(m => (
                 <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, minWidth: 20 }}>{m.emoji}</span>
+                  <IconoContenedor color={colorMaterial(m.id)} />
                   <span style={{ fontSize: 12, color: C.gray900, flex: 1 }}>{m.label}</span>
                   <div style={{ flex: 2 }}><BarraH valor={regSeleccionado.ocupacion?.[m.id] ?? 1} /></div>
                 </div>
@@ -926,7 +1000,7 @@ function ViewAdmin({ materiales, setMateriales, gestores, setGestores }) {
 
   function addMat() {
     if (!nuevoMat.trim()) return;
-    setMateriales(p => [...p, { id: `mat_${Date.now()}`, label: nuevoMat, emoji: "📦", activo: true }]);
+    setMateriales(p => [...p, { id: `mat_${Date.now()}`, label: nuevoMat, activo: true }]);
     setNuevoMat("");
   }
 
@@ -956,7 +1030,7 @@ function ViewAdmin({ materiales, setMateriales, gestores, setGestores }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             {materiales.map(m => (
               <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: `1px solid ${C.gray200}`, borderRadius: 8 }}>
-                <span style={{ fontSize: 16 }}>{m.emoji}</span>
+                <IconoContenedor color={colorMaterial(m.id)} />
                 <span style={{ flex: 1, fontSize: 13, color: m.activo ? C.gray900 : C.gray400 }}>{m.label}</span>
                 <Toggle value={m.activo} onChange={v => setMateriales(p => p.map(x => x.id === m.id ? { ...x, activo: v } : x))} />
               </div>
