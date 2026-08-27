@@ -656,77 +656,6 @@ function SectionTitle({ children, color = C.teal }) {
   return <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>{children}</div>;
 }
 
-// Ilustración del encabezado del dashboard: vista aérea de un barrio reciclando
-// (flat design, sin sombras, sin personas).
-const EDIFICIOS_ILUSTRACION = [
-  { x: 48, y: 70, w: 40, h: 36, color: "#C6217A" },
-  { x: 100, y: 54, w: 34, h: 30, color: "#00A99D" },
-  { x: 230, y: 44, w: 38, h: 34, color: "#00A99D" },
-  { x: 270, y: 78, w: 32, h: 30, color: "#C6217A" },
-  { x: 430, y: 42, w: 36, h: 32, color: "#C6217A" },
-  { x: 468, y: 76, w: 34, h: 30, color: "#00A99D" },
-  { x: 610, y: 56, w: 38, h: 34, color: "#00A99D" },
-  { x: 655, y: 90, w: 32, h: 28, color: "#C6217A" },
-];
-const ARBOLES_ILUSTRACION = [
-  { cx: 20, cy: 45, r: 7 },
-  { cx: 150, cy: 100, r: 10 },
-  { cx: 200, cy: 122, r: 8 },
-  { cx: 330, cy: 112, r: 9 },
-  { cx: 380, cy: 50, r: 7 },
-  { cx: 520, cy: 112, r: 10 },
-  { cx: 570, cy: 44, r: 8 },
-  { cx: 715, cy: 70, r: 9 },
-];
-const TACHOS_ILUSTRACION = [
-  { x: 14, y: 118, color: "#00A99D" },
-  { x: 178, y: 58, color: "#C6217A" },
-  { x: 398, y: 96, color: "#8DC63F" },
-  { x: 600, y: 112, color: "#00A99D" },
-  { x: 744, y: 48, color: "#C6217A" },
-];
-
-function IlustracionCiudad() {
-  return (
-    <svg width="100%" height="160" viewBox="0 0 800 160" role="img" aria-label="Ilustración de un barrio reciclando" style={{ display: "block" }}>
-      <rect x="0" y="0" width="800" height="160" rx="16" fill="#F3F4F6" />
-
-      {/* Calle */}
-      <path d="M10,95 Q200,82 400,95 T790,90" stroke="#ffffff" strokeWidth="7" strokeLinecap="round" fill="none" opacity="0.9" />
-
-      {/* Edificios con tejado verde */}
-      {EDIFICIOS_ILUSTRACION.map((e, i) => (
-        <g key={i}>
-          <rect x={e.x} y={e.y} width={e.w} height={e.h} rx="6" fill={e.color} />
-          <rect x={e.x + 3} y={e.y} width={e.w - 6} height={e.h * 0.45} rx="4" fill="#8DC63F" />
-        </g>
-      ))}
-
-      {/* Árboles redondeados */}
-      {ARBOLES_ILUSTRACION.map((t, i) => (
-        <circle key={i} cx={t.cx} cy={t.cy} r={t.r} fill="#8DC63F" />
-      ))}
-
-      {/* Contenedores de colores en las calles */}
-      {TACHOS_ILUSTRACION.map((b, i) => (
-        <g key={i}>
-          <rect x={b.x} y={b.y + 3} width="10" height="10" rx="2" fill={b.color} />
-          <rect x={b.x - 1} y={b.y} width="12" height="3.5" rx="1.5" fill={b.color} />
-        </g>
-      ))}
-
-      {/* Flechas curvas de reciclaje conectando los barrios */}
-      <path d="M40,62 C150,14 250,14 340,32 C430,50 530,50 620,22 C665,9 715,12 752,32"
-        stroke="#00A99D" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <polygon points="746,22 764,33 747,46" fill="#00A99D" />
-
-      <path d="M760,100 C650,150 550,150 460,130 C370,110 270,110 180,128 C130,138 92,133 58,113"
-        stroke="#C6217A" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <polygon points="65,103 47,113 66,126" fill="#C6217A" />
-    </svg>
-  );
-}
-
 // ─── Login ────────────────────────────────────────────────────────────────────
 function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -743,7 +672,7 @@ function Login({ onLogin }) {
     <div style={{ minHeight: "100vh", background: C.gray100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <Card style={{ width: "100%", maxWidth: 380, padding: 32 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>♻️</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><IconoLogo size={48} /></div>
           <div style={{ fontSize: 18, fontWeight: 700, color: C.gray900 }}>Punto Limpio Inteligente</div>
           <div style={{ fontSize: 12, color: C.gray600, marginTop: 4 }}>Municipalidad de Vitacura</div>
         </div>
@@ -925,7 +854,6 @@ function ViewDashboard({ registros, materiales, gestores }) {
 
   const statsFiltrados = filtroMaterial === "todos" ? stats : stats.filter(s => s.id === filtroMaterial);
 
-  const criticos = stats.filter(s => s.promActual >= 4);
   const retiros = registrosVista.filter(r => r.retiro && r.materialRetirado);
   const rechazados = registrosVista.filter(r => r.rechazado);
 
@@ -936,15 +864,17 @@ function ViewDashboard({ registros, materiales, gestores }) {
 
   // Alertas
   const alertas = [];
-  if (diasSinRegistro > 0) {
-    const msgSinRegistro = diaSeleccionado
-      ? `Sin registro para el día seleccionado (${labelVista})`
-      : `${diasSinRegistro} día(s) sin registro en ${labelVista}`;
-    alertas.push({ tipo: "registro", msg: msgSinRegistro, color: C.fucsia, bg: C.fucsiaLight });
+  if (diaSeleccionado) {
+    // En modo día solo importa la saturación puntual (nivel Lleno), sin
+    // comparaciones de variación ni aviso de "sin registro" — máximo 3.
+    stats.filter(s => s.promActual === 5).slice(0, 3)
+      .forEach(m => alertas.push({ tipo: "saturacion", msg: `Saturación: ${m.label} — Lleno (5/5)`, color: C.orange, bg: C.orangeLight }));
+  } else {
+    if (diasSinRegistro > 0) alertas.push({ tipo: "registro", msg: `${diasSinRegistro} día(s) sin registro en ${labelVista}`, color: C.fucsia, bg: C.fucsiaLight });
+    stats.filter(s => s.promActual >= 4).forEach(m => alertas.push({ tipo: "saturacion", msg: `Saturación: ${m.label} promedio ${m.promActual}/5`, color: C.orange, bg: C.orangeLight }));
+    stats.filter(s => s.variacion >= 1.5).forEach(m => alertas.push({ tipo: "subida", msg: `Subida relevante: ${m.label} +${m.variacion} vs ${labelComparacion}`, color: C.amber, bg: C.amberLight }));
+    stats.filter(s => s.variacion <= -1.5).forEach(m => alertas.push({ tipo: "caida", msg: `Caída relevante: ${m.label} ${m.variacion} vs ${labelComparacion}`, color: C.teal, bg: C.tealLight }));
   }
-  criticos.forEach(m => alertas.push({ tipo: "saturacion", msg: `Saturación: ${m.label} promedio ${m.promActual}/5`, color: C.orange, bg: C.orangeLight }));
-  stats.filter(s => s.variacion >= 1.5).forEach(m => alertas.push({ tipo: "subida", msg: `Subida relevante: ${m.label} +${m.variacion} vs ${labelComparacion}`, color: C.amber, bg: C.amberLight }));
-  stats.filter(s => s.variacion <= -1.5).forEach(m => alertas.push({ tipo: "caida", msg: `Caída relevante: ${m.label} ${m.variacion} vs ${labelComparacion}`, color: C.teal, bg: C.tealLight }));
 
   const selectStyle = { padding: "7px 10px", border: `1px solid ${C.gray200}`, borderRadius: 8, fontSize: 12, color: C.gray900, fontFamily: "inherit", background: C.white };
   const nombreArchivo = diaSeleccionado || filtroPeriodo;
@@ -997,8 +927,6 @@ function ViewDashboard({ registros, materiales, gestores }) {
           </Btn>
         </div>
       </div>
-
-      <IlustracionCiudad />
 
       {/* Detalle del día seleccionado */}
       {diaSeleccionado && (
