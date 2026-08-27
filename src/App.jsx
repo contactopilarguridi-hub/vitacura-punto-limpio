@@ -53,28 +53,138 @@ function nivelInfo(v) { return NIVELES.find(n => n.valor === v) || NIVELES[1]; }
 function fechaHoy() { return new Date().toISOString().split("T")[0]; }
 function pct(v) { return ((v - 1) / 4) * 100; }
 
+// ─── Períodos del dashboard ───────────────────────────────────────────────────
+function toISO(d) { return d.toISOString().split("T")[0]; }
+function addDias(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
+function inicioDeMes(date) { return new Date(date.getFullYear(), date.getMonth(), 1); }
+function finDeMesAnterior(date) { return new Date(date.getFullYear(), date.getMonth(), 0); }
+
+function calcularRangoPeriodo(periodo) {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  let inicio, fin, inicioAnt, finAnt, label;
+
+  switch (periodo) {
+    case "semana_anterior":
+      fin = addDias(hoy, -7);
+      inicio = addDias(fin, -6);
+      finAnt = addDias(inicio, -1);
+      inicioAnt = addDias(finAnt, -6);
+      label = "semana anterior";
+      break;
+    case "mes_actual":
+      inicio = inicioDeMes(hoy);
+      fin = hoy;
+      finAnt = addDias(inicio, -1);
+      inicioAnt = inicioDeMes(finAnt);
+      label = "este mes";
+      break;
+    case "mes_anterior":
+      fin = finDeMesAnterior(hoy);
+      inicio = inicioDeMes(fin);
+      finAnt = addDias(inicio, -1);
+      inicioAnt = inicioDeMes(finAnt);
+      label = "mes anterior";
+      break;
+    case "ultimos_30":
+      fin = hoy;
+      inicio = addDias(hoy, -29);
+      finAnt = addDias(inicio, -1);
+      inicioAnt = addDias(finAnt, -29);
+      label = "últimos 30 días";
+      break;
+    case "semana_actual":
+    default:
+      fin = hoy;
+      inicio = addDias(hoy, -6);
+      finAnt = addDias(inicio, -1);
+      inicioAnt = addDias(finAnt, -6);
+      label = "esta semana";
+      break;
+  }
+
+  const dias = Math.round((fin - inicio) / 86400000) + 1;
+  return { inicio, fin, inicioAnt, finAnt, dias, label };
+}
+
+// ─── Exportar CSV ─────────────────────────────────────────────────────────────
+function csvEscape(valor) {
+  const s = String(valor ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportarCSV(regs, materiales, gestores, nombreArchivo) {
+  const matsActivos = materiales.filter(m => m.activo);
+  const headers = [
+    "Fecha", "Usuario", ...matsActivos.map(m => m.label),
+    "Rechazado", "Tipo rechazado", "Retiro", "Material retirado", "Gestor", "Observaciones",
+  ];
+  const filas = regs.map(r => [
+    r.fecha,
+    r.usuario,
+    ...matsActivos.map(m => r.ocupacion?.[m.id] ?? ""),
+    r.rechazado ? "Sí" : "No",
+    r.tipoRechazado || "",
+    r.retiro ? "Sí" : "No",
+    materiales.find(m => m.id === r.materialRetirado)?.label || "",
+    gestores.find(g => g.id === r.gestor)?.nombre || "",
+    r.observaciones || "",
+  ]);
+  const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function generarDemo(materiales) {
   const hoy = new Date();
   const regs = [];
-  for (let i = 13; i >= 1; i--) {
-    if (i === 5 || i === 10) continue;
+
+  // Días sin registro dentro de los últimos 30 días (huecos deliberados para demo)
+  const diasSinRegistro = new Set([5, 10, 17, 23]);
+
+  const retirosPorDia = {
+    6: { material: "papel_carton", gestor: "coaniquem" },
+    14: { material: "vidrio", gestor: "triciclo" },
+    20: { material: "metal", gestor: "gerdau" },
+    27: { material: "plastico_botellas", gestor: "triciclo" },
+  };
+  const rechazosPorDia = {
+    3: "Escombros",
+    19: "Restos de poda",
+  };
+  const observacionesPorDia = {
+    3: "Se rechazó material de construcción. Usuario informado.",
+    7: "Alta afluencia. Cartón saturado antes del cierre.",
+    20: "Retiro coordinado con Gerdau, chatarra despachada sin incidentes.",
+  };
+
+  for (let i = 29; i >= 1; i--) {
+    if (diasSinRegistro.has(i)) continue;
     const f = new Date(hoy);
     f.setDate(hoy.getDate() - i);
     const ocupacion = {};
     materiales.filter(m => m.activo).forEach(m => {
       ocupacion[m.id] = Math.ceil(Math.random() * 5);
     });
+    const retiroInfo = retirosPorDia[i];
     regs.push({
       id: `reg_${i}`,
       fecha: f.toISOString().split("T")[0],
       usuario: "Carlos Fuentes",
       ocupacion,
-      rechazado: i === 3,
-      tipoRechazado: i === 3 ? "Escombros" : "",
-      retiro: i === 6,
-      materialRetirado: i === 6 ? "papel_carton" : "",
-      gestor: i === 6 ? "coaniquem" : "",
-      observaciones: i === 3 ? "Se rechazó material de construcción. Usuario informado." : i === 7 ? "Alta afluencia. Cartón saturado antes del cierre." : "",
+      rechazado: !!rechazosPorDia[i],
+      tipoRechazado: rechazosPorDia[i] || "",
+      retiro: !!retiroInfo,
+      materialRetirado: retiroInfo?.material || "",
+      gestor: retiroInfo?.gestor || "",
+      observaciones: observacionesPorDia[i] || "",
       estado: "completo",
     });
   }
@@ -112,6 +222,22 @@ function BarraH({ valor }) {
       </div>
       <Tag label={info.label} color={info.color} bg={info.bg} />
     </div>
+  );
+}
+
+function Sparkline({ valores, color }) {
+  const w = 220, h = 36, pad = 3;
+  if (valores.length < 2) {
+    return <div style={{ fontSize: 11, color: C.gray400, height: h, display: "flex", alignItems: "center" }}>Datos insuficientes para graficar tendencia.</div>;
+  }
+  const stepX = (w - pad * 2) / (valores.length - 1);
+  const y = v => h - pad - ((v - 1) / 4) * (h - pad * 2);
+  const puntos = valores.map((v, i) => `${pad + i * stepX},${y(v)}`).join(" ");
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
+      <polyline points={puntos} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {valores.map((v, i) => <circle key={i} cx={pad + i * stepX} cy={y(v)} r="2" fill={color} />)}
+    </svg>
   );
 }
 
@@ -297,43 +423,56 @@ function ViewFormulario({ registros, materiales, gestores, usuario, onGuardar })
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function ViewDashboard({ registros, materiales, gestores }) {
-  const [filtroSemana, setFiltroSemana] = useState("actual");
+  const [filtroPeriodo, setFiltroPeriodo] = useState("semana_actual");
   const [filtroMaterial, setFiltroMaterial] = useState("todos");
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
   const mats = materiales.filter(m => m.activo);
+  const rango = calcularRangoPeriodo(filtroPeriodo);
+  const inicioISO = toISO(rango.inicio);
+  const finISO = toISO(rango.fin);
+  const inicioAntISO = toISO(rango.inicioAnt);
+  const finAntISO = toISO(rango.finAnt);
 
-  const ultimos7 = registros.slice(-7);
-  const anteriores7 = registros.slice(-14, -7);
+  const registrosPeriodo = registros.filter(r => r.fecha >= inicioISO && r.fecha <= finISO);
+  const registrosPeriodoAnterior = registros.filter(r => r.fecha >= inicioAntISO && r.fecha <= finAntISO);
 
   function prom(regs, id) {
     if (!regs.length) return 0;
     return parseFloat((regs.reduce((a, r) => a + (r.ocupacion?.[id] ?? 0), 0) / regs.length).toFixed(1));
   }
 
-  const diasRegistrados = registros.slice(-14).length;
-  const diasSinRegistro = 14 - diasRegistrados;
+  const diasRegistrados = registrosPeriodo.length;
+  const diasSinRegistro = Math.max(rango.dias - diasRegistrados, 0);
+  const cumplimiento = rango.dias > 0 ? Math.round((diasRegistrados / rango.dias) * 100) : 0;
 
   const stats = mats.map(m => ({
     ...m,
-    promActual: prom(ultimos7, m.id),
-    variacion: +(prom(ultimos7, m.id) - prom(anteriores7, m.id)).toFixed(1),
+    promActual: prom(registrosPeriodo, m.id),
+    variacion: +(prom(registrosPeriodo, m.id) - prom(registrosPeriodoAnterior, m.id)).toFixed(1),
   })).sort((a, b) => b.promActual - a.promActual);
 
   const statsFiltrados = filtroMaterial === "todos" ? stats : stats.filter(s => s.id === filtroMaterial);
 
   const criticos = stats.filter(s => s.promActual >= 4);
-  const retiros = registros.filter(r => r.retiro && r.materialRetirado);
-  const rechazados = registros.filter(r => r.rechazado);
+  const retiros = registrosPeriodo.filter(r => r.retiro && r.materialRetirado);
+  const rechazados = registrosPeriodo.filter(r => r.rechazado);
+
+  const retirosPorGestor = gestores.filter(g => g.activo)
+    .map(g => ({ ...g, count: retiros.filter(r => r.gestor === g.id).length }))
+    .filter(g => g.count > 0)
+    .sort((a, b) => b.count - a.count);
 
   // Alertas
   const alertas = [];
-  if (diasSinRegistro > 0) alertas.push({ tipo: "registro", msg: `${diasSinRegistro} día(s) sin registro en las últimas 2 semanas`, color: C.fucsia, bg: C.fucsiaLight });
+  if (diasSinRegistro > 0) alertas.push({ tipo: "registro", msg: `${diasSinRegistro} día(s) sin registro en ${rango.label}`, color: C.fucsia, bg: C.fucsiaLight });
   criticos.forEach(m => alertas.push({ tipo: "saturacion", msg: `Saturación: ${m.label} promedio ${m.promActual}/5`, color: C.orange, bg: C.orangeLight }));
-  stats.filter(s => s.variacion >= 1.5).forEach(m => alertas.push({ tipo: "subida", msg: `Subida relevante: ${m.label} +${m.variacion} vs semana anterior`, color: C.amber, bg: C.amberLight }));
-  stats.filter(s => s.variacion <= -1.5).forEach(m => alertas.push({ tipo: "caida", msg: `Caída relevante: ${m.label} ${m.variacion} vs semana anterior`, color: C.teal, bg: C.tealLight }));
+  stats.filter(s => s.variacion >= 1.5).forEach(m => alertas.push({ tipo: "subida", msg: `Subida relevante: ${m.label} +${m.variacion} vs período anterior`, color: C.amber, bg: C.amberLight }));
+  stats.filter(s => s.variacion <= -1.5).forEach(m => alertas.push({ tipo: "caida", msg: `Caída relevante: ${m.label} ${m.variacion} vs período anterior`, color: C.teal, bg: C.tealLight }));
 
   const regSeleccionado = diaSeleccionado ? registros.find(r => r.fecha === diaSeleccionado) : null;
+
+  const selectStyle = { padding: "7px 10px", border: `1px solid ${C.gray200}`, borderRadius: 8, fontSize: 12, color: C.gray900, fontFamily: "inherit", background: C.white };
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -342,27 +481,32 @@ function ViewDashboard({ registros, materiales, gestores }) {
           <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Panel en tiempo real</div>
           <div style={{ fontSize: 19, fontWeight: 700, color: C.gray900 }}>Punto Limpio — Vitacura</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <select value={filtroSemana} onChange={e => setFiltroSemana(e.target.value)}
-            style={{ padding: "7px 10px", border: `1px solid ${C.gray200}`, borderRadius: 8, fontSize: 12, color: C.gray900, fontFamily: "inherit", background: C.white }}>
-            <option value="actual">Esta semana</option>
-            <option value="anterior">Semana anterior</option>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} style={selectStyle}>
+            <option value="semana_actual">Esta semana</option>
+            <option value="semana_anterior">Semana anterior</option>
+            <option value="mes_actual">Este mes</option>
+            <option value="mes_anterior">Mes anterior</option>
+            <option value="ultimos_30">Últimos 30 días</option>
           </select>
-          <select value={filtroMaterial} onChange={e => setFiltroMaterial(e.target.value)}
-            style={{ padding: "7px 10px", border: `1px solid ${C.gray200}`, borderRadius: 8, fontSize: 12, color: C.gray900, fontFamily: "inherit", background: C.white }}>
+          <select value={filtroMaterial} onChange={e => setFiltroMaterial(e.target.value)} style={selectStyle}>
             <option value="todos">Todos los materiales</option>
             {mats.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
+          <Btn variant="secondary" size="sm" onClick={() => exportarCSV(registrosPeriodo, materiales, gestores, `punto-limpio_${filtroPeriodo}_${fechaHoy()}.csv`)}>
+            📥 Exportar CSV
+          </Btn>
         </div>
       </div>
 
       {/* Métricas */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
         {[
-          { label: "Días registrados", valor: diasRegistrados, sub: "últimos 14", color: C.teal, bg: C.tealLight },
+          { label: "Cumplimiento", valor: `${cumplimiento}%`, sub: `${diasRegistrados}/${rango.dias} días con registro`, color: cumplimiento >= 80 ? C.teal : cumplimiento >= 50 ? C.amber : C.fucsia, bg: cumplimiento >= 80 ? C.tealLight : cumplimiento >= 50 ? C.amberLight : C.fucsiaLight },
+          { label: "Días registrados", valor: diasRegistrados, sub: `de ${rango.dias} en ${rango.label}`, color: C.teal, bg: C.tealLight },
           { label: "Sin registro", valor: diasSinRegistro, sub: "requieren atención", color: diasSinRegistro > 0 ? C.fucsia : C.teal, bg: diasSinRegistro > 0 ? C.fucsiaLight : C.tealLight },
-          { label: "Alertas activas", valor: alertas.length, sub: "esta semana", color: alertas.length > 0 ? C.orange : C.teal, bg: alertas.length > 0 ? C.orangeLight : C.tealLight },
-          { label: "Retiros", valor: retiros.length, sub: "registrados", color: C.teal, bg: C.tealLight },
+          { label: "Alertas activas", valor: alertas.length, sub: rango.label, color: alertas.length > 0 ? C.orange : C.teal, bg: alertas.length > 0 ? C.orangeLight : C.tealLight },
+          { label: "Retiros", valor: retiros.length, sub: rango.label, color: C.teal, bg: C.tealLight },
         ].map(m => (
           <Card key={m.label} style={{ padding: 14 }}>
             <div style={{ fontSize: 30, fontWeight: 800, color: m.color, lineHeight: 1 }}>{m.valor}</div>
@@ -386,17 +530,15 @@ function ViewDashboard({ registros, materiales, gestores }) {
 
       {/* Barras */}
       <Card style={{ padding: 20 }}>
-        <SectionTitle>Ocupación promedio — {filtroSemana === "actual" ? "esta semana" : "semana anterior"}</SectionTitle>
+        <SectionTitle>Ocupación promedio — {rango.label}</SectionTitle>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {statsFiltrados.map(m => (
             <div key={m.id}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 13, color: C.gray900 }}>{m.emoji} {m.label}</span>
-                {filtroSemana === "actual" && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: m.variacion > 0.5 ? C.orange : m.variacion < -0.5 ? C.fucsia : C.gray400 }}>
-                    {m.variacion > 0 ? "↑" : m.variacion < 0 ? "↓" : "="} {Math.abs(m.variacion)} vs anterior
-                  </span>
-                )}
+                <span style={{ fontSize: 11, fontWeight: 700, color: m.variacion > 0.5 ? C.orange : m.variacion < -0.5 ? C.fucsia : C.gray400 }}>
+                  {m.variacion > 0 ? "↑" : m.variacion < 0 ? "↓" : "="} {Math.abs(m.variacion)} vs período anterior
+                </span>
               </div>
               <BarraH valor={Math.round(m.promActual) || 1} />
             </div>
@@ -404,21 +546,48 @@ function ViewDashboard({ registros, materiales, gestores }) {
         </div>
       </Card>
 
-      {/* Retiros y rechazados */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Card style={{ padding: 16 }}>
-          <SectionTitle>Retiros registrados</SectionTitle>
-          {retiros.length === 0 ? <div style={{ fontSize: 12, color: C.gray400 }}>Sin retiros este período.</div> :
-            retiros.slice(-5).map((r, i) => {
-              const mat = materiales.find(m => m.id === r.materialRetirado);
-              const gest = gestores.find(g => g.id === r.gestor);
+      {/* Tendencia */}
+      <Card style={{ padding: 20 }}>
+        <SectionTitle>Tendencia por material — {rango.label}</SectionTitle>
+        {registrosPeriodo.length < 2 ? (
+          <div style={{ fontSize: 12, color: C.gray400 }}>No hay suficientes registros en el período para graficar la tendencia.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {statsFiltrados.map(m => {
+              const valores = registrosPeriodo.map(r => r.ocupacion?.[m.id]).filter(v => v != null);
+              const color = nivelInfo(Math.round(m.promActual) || 1).color;
               return (
-                <div key={i} style={{ fontSize: 12, color: C.gray900, marginBottom: 6, padding: "6px 8px", background: C.gray100, borderRadius: 6 }}>
-                  <div style={{ fontWeight: 600 }}>{mat?.emoji} {mat?.label}</div>
-                  <div style={{ color: C.gray600 }}>{gest?.nombre} · {r.fecha}</div>
+                <div key={m.id}>
+                  <div style={{ fontSize: 13, color: C.gray900, marginBottom: 4 }}>{m.emoji} {m.label}</div>
+                  <Sparkline valores={valores} color={color} />
                 </div>
               );
             })}
+          </div>
+        )}
+      </Card>
+
+      {/* Retiros y rechazados */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Card style={{ padding: 16 }}>
+          <SectionTitle>Retiros — {rango.label}</SectionTitle>
+          {retiros.length === 0 ? <div style={{ fontSize: 12, color: C.gray400 }}>Sin retiros este período.</div> : (
+            <>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {retirosPorGestor.map(g => <Tag key={g.id} label={`${g.nombre}: ${g.count}`} color={C.teal} bg={C.tealLight} />)}
+              </div>
+              {retiros.slice(-5).map((r, i) => {
+                const mat = materiales.find(m => m.id === r.materialRetirado);
+                const gest = gestores.find(g => g.id === r.gestor);
+                return (
+                  <div key={i} style={{ fontSize: 12, color: C.gray900, marginBottom: 6, padding: "6px 8px", background: C.gray100, borderRadius: 6 }}>
+                    <div style={{ fontWeight: 600 }}>{mat?.emoji} {mat?.label}</div>
+                    <div style={{ color: C.gray600 }}>{gest?.nombre} · {r.fecha}</div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </Card>
         <Card style={{ padding: 16 }}>
           <SectionTitle color={C.fucsia}>Material rechazado</SectionTitle>
@@ -434,10 +603,10 @@ function ViewDashboard({ registros, materiales, gestores }) {
 
       {/* Historial */}
       <Card style={{ padding: 20 }}>
-        <SectionTitle>Historial — selecciona un día para ver detalle</SectionTitle>
+        <SectionTitle>Historial (30 días) — selecciona un día para ver detalle</SectionTitle>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-          {Array.from({ length: 14 }).map((_, i) => {
-            const f = new Date(); f.setDate(f.getDate() - (13 - i));
+          {Array.from({ length: 30 }).map((_, i) => {
+            const f = new Date(); f.setDate(f.getDate() - (29 - i));
             const fs = f.toISOString().split("T")[0];
             const reg = registros.find(r => r.fecha === fs);
             const sel = diaSeleccionado === fs;
