@@ -107,39 +107,210 @@ function calcularRangoPeriodo(periodo) {
   return { inicio, fin, inicioAnt, finAnt, dias, label };
 }
 
-// ─── Exportar CSV ─────────────────────────────────────────────────────────────
-function csvEscape(valor) {
-  const s = String(valor ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// ─── Exportar reporte PDF ─────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function exportarCSV(regs, materiales, gestores, nombreArchivo) {
-  const matsActivos = materiales.filter(m => m.activo);
-  const headers = [
-    "Fecha", "Usuario", ...matsActivos.map(m => m.label),
-    "Rechazado", "Tipo rechazado", "Retiro", "Material retirado", "Gestor", "Observaciones",
-  ];
-  const filas = regs.map(r => [
-    r.fecha,
-    r.usuario,
-    ...matsActivos.map(m => r.ocupacion?.[m.id] ?? ""),
-    r.rechazado ? "Sí" : "No",
-    r.tipoRechazado || "",
-    r.retiro ? "Sí" : "No",
-    materiales.find(m => m.id === r.materialRetirado)?.label || "",
-    gestores.find(g => g.id === r.gestor)?.nombre || "",
-    r.observaciones || "",
+async function exportarPDF({ rango, statsFiltrados, alertas, retiros, retirosPorGestor, rechazados, diasRegistrados, cumplimiento }) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
   ]);
-  const csv = [headers, ...filas].map(fila => fila.map(csvEscape).join(",")).join("\r\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombreArchivo;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 14;
+
+  const teal = hexToRgb(C.teal);
+  const fucsia = hexToRgb(C.fucsia);
+  const orange = hexToRgb(C.orange);
+  const amber = hexToRgb(C.amber);
+  const gray900 = hexToRgb(C.gray900);
+  const gray600 = hexToRgb(C.gray600);
+  const gray200 = hexToRgb(C.gray200);
+  const white = [255, 255, 255];
+
+  const ahora = new Date();
+  const fechaGeneracion = `${ahora.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })} ${ahora.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}`;
+
+  function ensureSpace(alto) {
+    if (y + alto > pageH - 22) { doc.addPage(); y = 20; }
+  }
+
+  // ── Encabezado institucional ──
+  doc.setFillColor(...teal);
+  doc.rect(0, 0, pageW, 36, "F");
+
+  doc.setFillColor(...white);
+  doc.circle(24, 18, 9, "F");
+  doc.setTextColor(...teal);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("♻", 24, 21.5, { align: "center" });
+
+  doc.setTextColor(...white);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  doc.text("Punto Limpio Inteligente", 40, 16);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text("Municipalidad de Vitacura", 40, 22.5);
+
+  doc.setFontSize(9);
+  doc.text(`Período: ${rango.label}`, pageW - marginX, 14, { align: "right" });
+  doc.text(`Generado: ${fechaGeneracion}`, pageW - marginX, 20, { align: "right" });
+
+  let y = 48;
+
+  // ── Métricas ──
+  doc.setTextColor(...gray900);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("MÉTRICAS DEL PERÍODO", marginX, y);
+  y += 6;
+
+  const metricas = [
+    { label: "Días registrados", valor: `${diasRegistrados}/${rango.dias}`, color: teal },
+    { label: "% Cumplimiento", valor: `${cumplimiento}%`, color: cumplimiento >= 80 ? teal : cumplimiento >= 50 ? amber : fucsia },
+    { label: "Alertas activas", valor: `${alertas.length}`, color: alertas.length > 0 ? orange : teal },
+    { label: "Retiros", valor: `${retiros.length}`, color: teal },
+  ];
+  const boxW = (pageW - marginX * 2 - 3 * 4) / 4;
+  metricas.forEach((m, i) => {
+    const x = marginX + i * (boxW + 4);
+    doc.setDrawColor(...gray200);
+    doc.setFillColor(248, 249, 250);
+    doc.roundedRect(x, y, boxW, 20, 2, 2, "FD");
+    doc.setTextColor(...m.color);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(m.valor, x + boxW / 2, y + 10, { align: "center" });
+    doc.setTextColor(...gray600);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.text(m.label, x + boxW / 2, y + 16, { align: "center" });
+  });
+  y += 28;
+
+  // ── Ocupación promedio por material ──
+  doc.setTextColor(...gray900);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("OCUPACIÓN PROMEDIO POR MATERIAL", marginX, y);
+  y += 3;
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: marginX, right: marginX },
+    head: [["Material", "Promedio", "Nivel"]],
+    body: statsFiltrados.map(m => [`${m.emoji} ${m.label}`, `${m.promActual}/5`, nivelInfo(Math.round(m.promActual) || 1).label]),
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: teal, textColor: white, fontStyle: "bold" },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 2) {
+        const m = statsFiltrados[data.row.index];
+        const nivel = nivelInfo(Math.round(m.promActual) || 1);
+        data.cell.styles.textColor = hexToRgb(nivel.color);
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // ── Alertas activas ──
+  ensureSpace(16);
+  doc.setTextColor(...gray900);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("ALERTAS ACTIVAS", marginX, y);
+  y += 6;
+  if (alertas.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...gray600);
+    doc.text("Sin alertas activas en el período.", marginX, y);
+    y += 8;
+  } else {
+    alertas.forEach(a => {
+      ensureSpace(7);
+      doc.setFillColor(...hexToRgb(a.color));
+      doc.circle(marginX + 1.2, y - 1.2, 1.2, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...gray900);
+      doc.text(a.msg, marginX + 5, y);
+      y += 6.5;
+    });
+    y += 2;
+  }
+
+  // ── Retiros por gestor ──
+  ensureSpace(16);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...gray900);
+  doc.text("RETIROS POR GESTOR", marginX, y);
+  y += 3;
+  if (retirosPorGestor.length === 0) {
+    y += 4;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...gray600);
+    doc.text("Sin retiros registrados en el período.", marginX, y);
+    y += 8;
+  } else {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: marginX, right: marginX },
+      head: [["Gestor", "Retiros en el período"]],
+      body: retirosPorGestor.map(g => [g.nombre, String(g.count)]),
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: teal, textColor: white, fontStyle: "bold" },
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  }
+
+  // ── Material rechazado ──
+  ensureSpace(16);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...gray900);
+  doc.text("MATERIAL RECHAZADO", marginX, y);
+  y += 3;
+  if (rechazados.length === 0) {
+    y += 4;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...gray600);
+    doc.text("Sin rechazos registrados en el período.", marginX, y);
+  } else {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: marginX, right: marginX },
+      head: [["Fecha", "Tipo de material rechazado"]],
+      body: rechazados.map(r => [r.fecha, r.tipoRechazado || "—"]),
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: fucsia, textColor: white, fontStyle: "bold" },
+    });
+  }
+
+  // ── Pie de página ──
+  const totalPaginas = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPaginas; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...gray200);
+    doc.line(marginX, pageH - 15, pageW - marginX, pageH - 15);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...gray600);
+    doc.text("Generado automáticamente por Punto Limpio Inteligente — Vitacura", marginX, pageH - 10);
+    doc.text(`Página ${i}/${totalPaginas}`, pageW - marginX, pageH - 10, { align: "right" });
+  }
+
+  doc.save(`reporte-punto-limpio_${rango.label.replace(/\s+/g, "-")}_${fechaHoy()}.pdf`);
 }
 
 function generarDemo(materiales) {
@@ -493,8 +664,8 @@ function ViewDashboard({ registros, materiales, gestores }) {
             <option value="todos">Todos los materiales</option>
             {mats.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
-          <Btn variant="secondary" size="sm" onClick={() => exportarCSV(registrosPeriodo, materiales, gestores, `punto-limpio_${filtroPeriodo}_${fechaHoy()}.csv`)}>
-            📥 Exportar CSV
+          <Btn variant="secondary" size="sm" onClick={() => exportarPDF({ rango, statsFiltrados, alertas, retiros, retirosPorGestor, rechazados, diasRegistrados, cumplimiento })}>
+            📄 Exportar reporte PDF
           </Btn>
         </div>
       </div>
