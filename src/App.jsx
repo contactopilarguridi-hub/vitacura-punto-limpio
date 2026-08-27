@@ -41,6 +41,26 @@ const USUARIOS = [
   { id: "sysadmin", nombre: "Administrador", rol: "sysadmin", email: "admin@vitacura.cl", pass: "1234" },
 ];
 
+// ─── Sesión persistida ────────────────────────────────────────────────────────
+const USUARIO_STORAGE_KEY = "puntoLimpio_usuarioId";
+
+function cargarUsuarioGuardado() {
+  try {
+    const id = localStorage.getItem(USUARIO_STORAGE_KEY);
+    return id ? USUARIOS.find(u => u.id === id) ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarUsuarioSesion(usuario) {
+  try { localStorage.setItem(USUARIO_STORAGE_KEY, usuario.id); } catch { /* localStorage no disponible */ }
+}
+
+function borrarUsuarioSesion() {
+  try { localStorage.removeItem(USUARIO_STORAGE_KEY); } catch { /* localStorage no disponible */ }
+}
+
 const NIVELES = [
   { valor: 1, label: "Vacío",  color: C.lime,   bg: C.limeLight },
   { valor: 2, label: "Bajo",   color: C.teal,   bg: C.tealLight },
@@ -974,17 +994,32 @@ function ViewAdmin({ materiales, setMateriales, gestores, setGestores }) {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [usuario, setUsuario] = useState(null);
+  const [usuario, setUsuario] = useState(() => cargarUsuarioGuardado());
   const [materiales, setMateriales] = useState(MATERIALES_INIT);
   const [gestores, setGestores] = useState(GESTORES_INIT);
   const [registros, setRegistros] = useState(() => generarDemo(MATERIALES_INIT));
-  const [vista, setVista] = useState("formulario");
+  const [vista, setVista] = useState(() => {
+    const recuperado = cargarUsuarioGuardado();
+    if (!recuperado) return "formulario";
+    return recuperado.email === "admin@vitacura.cl" ? "dashboard" : "formulario";
+  });
 
   function handleGuardar(reg) {
     setRegistros(prev => [...prev.filter(r => r.fecha !== reg.fecha), reg].sort((a, b) => a.fecha.localeCompare(b.fecha)));
   }
 
-  if (!usuario) return <Login onLogin={u => { setUsuario(u); setVista(u.rol === "recinto" ? "formulario" : "dashboard"); }} />;
+  function handleLogin(u) {
+    setUsuario(u);
+    setVista(u.rol === "recinto" ? "formulario" : "dashboard");
+    guardarUsuarioSesion(u);
+  }
+
+  function handleLogout() {
+    setUsuario(null);
+    borrarUsuarioSesion();
+  }
+
+  if (!usuario) return <Login onLogin={handleLogin} />;
 
   const tabs = [];
   if (usuario.rol === "recinto" || usuario.rol === "sysadmin") tabs.push({ id: "formulario", label: "Registro diario" });
@@ -1007,7 +1042,7 @@ export default function App() {
               <div style={{ fontSize: 12, fontWeight: 600, color: C.gray900 }}>{usuario.nombre}</div>
               <div style={{ fontSize: 10, color: C.gray600 }}>{usuario.rol}</div>
             </div>
-            <Btn variant="ghost" size="sm" onClick={() => setUsuario(null)}>Salir</Btn>
+            <Btn variant="ghost" size="sm" onClick={handleLogout}>Salir</Btn>
           </div>
         </div>
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "0 16px", display: "flex" }}>
