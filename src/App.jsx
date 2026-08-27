@@ -540,6 +540,22 @@ function IconoContenedor({ color = MATERIAL_COLOR_DEFAULT, size = 20 }) {
   );
 }
 
+// Ícono institucional: contenedor de reciclaje teal con flecha curva lima
+// encima. Flat design, sin sombras. Usado en el header y como base de los
+// íconos PWA (ver scripts/generate-icons.js).
+function IconoLogo({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" style={{ flexShrink: 0, display: "block" }}>
+      <rect x="6" y="11" width="20" height="3.2" rx="1.6" fill="#00A99D" />
+      <rect x="8" y="13.5" width="16" height="15" rx="3" fill="#00A99D" />
+      <rect x="13" y="17" width="1.8" height="8" rx="0.9" fill="#ffffff" opacity="0.5" />
+      <rect x="18" y="17" width="1.8" height="8" rx="0.9" fill="#ffffff" opacity="0.5" />
+      <path d="M6,8 C10,2 22,2 26,8" stroke="#8DC63F" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+      <polygon points="23,4.5 28.5,8 22.5,11" fill="#8DC63F" />
+    </svg>
+  );
+}
+
 // Etiqueta de material: ícono de contenedor + nombre.
 function MaterialLabel({ material, style = {} }) {
   return (
@@ -1178,7 +1194,7 @@ export default function App() {
       <div style={{ background: C.white, borderBottom: `1px solid ${C.gray200}` }}>
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 18 }}>♻️</span>
+            <IconoLogo size={32} />
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.gray900 }}>Punto Limpio Inteligente</div>
               <div style={{ fontSize: 10, color: C.gray600 }}>Municipalidad de Vitacura</div>

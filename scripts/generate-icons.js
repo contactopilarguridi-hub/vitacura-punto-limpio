@@ -1,6 +1,8 @@
 // Genera los íconos PWA de Punto Limpio Inteligente (Vitacura) a partir de un
-// SVG dibujado a mano: hoja verde con flecha de reciclaje en teal sobre fondo
-// blanco. Rasteriza a PNG en 192x192 y 512x512 con sharp.
+// SVG dibujado a mano: contenedor de reciclaje teal con una flecha curva
+// verde lima encima, sobre fondo blanco con bordes redondeados. Mismo diseño
+// que IconoLogo en src/App.jsx (header de la app). Rasteriza a PNG en
+// 192x192 y 512x512 con sharp.
 //
 // Uso: node scripts/generate-icons.js
 
@@ -16,15 +18,14 @@ const TAMANOS = [192, 512];
 const ICONO_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <rect width="100" height="100" rx="20" fill="#ffffff"/>
-  <circle cx="50" cy="50" r="48" fill="#00A99D"/>
-  <!-- Hoja -->
-  <path d="M50 20 C30 20 20 35 20 50 C20 65 35 75 50 75 C65 75 80 65 80 50 C80 35 70 20 50 20Z" fill="#8DC63F"/>
-  <!-- Nervadura -->
-  <path d="M50 25 L50 70" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M50 45 C40 40 32 42 28 48" stroke="#ffffff" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M50 55 C60 50 68 52 72 58" stroke="#ffffff" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <!-- Flecha reciclaje pequeña abajo -->
-  <path d="M38 78 L50 88 L62 78" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Contenedor -->
+  <rect x="19" y="41" width="62" height="6" rx="3" fill="#00A99D"/>
+  <rect x="25" y="47" width="50" height="46" rx="9" fill="#00A99D"/>
+  <rect x="41" y="58" width="5.5" height="25" rx="2.75" fill="#ffffff" opacity="0.5"/>
+  <rect x="55" y="58" width="5.5" height="25" rx="2.75" fill="#ffffff" opacity="0.5"/>
+  <!-- Flecha curva de reciclaje -->
+  <path d="M18,32 C32,10 68,10 82,32" stroke="#8DC63F" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <polygon points="72,17 90,32 70,40" fill="#8DC63F"/>
 </svg>
 `.trim();
 
